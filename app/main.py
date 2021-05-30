@@ -7,7 +7,7 @@ from flask_cors import CORS
 import plotly.express as px
 import plotly
 import json as json
-
+import plotly.graph_objs as go
 
 #beta = effective_contact_rate
 #delta = death_rate
@@ -18,12 +18,14 @@ import json as json
 
 app = Flask(__name__)
 CORS(app)
-
 @app.route('/chart', methods=['GET'])
 def make_chart():
-    return make_plot(), 200
+    location = request.args.get('location')
+    day = int(request.args.get('days'))
+    vaccine = int(request.args.get('vaccine'))
+    return make_plot(location,60,day,vaccine), 200
 
-def deriv(state, N, location_variables, alpha):
+def deriv(state, N, location_variables, alpha, location):
     S = state["susceptible"]
     I = state["infected"]
     R = state["recovered"]
@@ -31,13 +33,13 @@ def deriv(state, N, location_variables, alpha):
 
     beta = location_variables["beta"]
     delta = location_variables["delta"]
-    gamma = 1/3.5
+    gamma_val = gamma(location)
     sigma = 0.95
     
     dSdt = ((-beta * S * I / N) - alpha) 
-    dIdt = (beta * S * I / N - (gamma * I) +  (R*sigma*beta*I/N)) 
-    dRdt = gamma * I * (1-delta) - (R*sigma*beta*I/N) +alpha
-    dDdt = gamma * I * delta
+    dIdt = (beta * S * I / N - (gamma_val * I) +  (R*sigma*beta*I/N))
+    dRdt = gamma_val * I * (1-delta) - (R*sigma*beta*I/N) +alpha
+    dDdt = gamma_val * I * delta
     return [int(dSdt), int(dIdt), int(dRdt), int(dDdt)]
 
 
@@ -46,6 +48,7 @@ def deriv(state, N, location_variables, alpha):
 def calc_route():
     total_vaccine_per_day = int(request.args.get('vaccine'))
     days= int(request.args.get('days'))
+    
     return calc_all(total_vaccine_per_day,days),200
 
 def calc_all(total_vaccine_per_day, days):
@@ -81,7 +84,7 @@ def calc_all(total_vaccine_per_day, days):
                 else:
                     alpha = 0       
                 location_data[i][location]['vaccinated'] = alpha + location_data[i-1][location]['vaccinated']
-                deriv_array = deriv(location_data[i-1][location], pop[location], location_variables[location], alpha)
+                deriv_array = deriv(location_data[i-1][location], pop[location], location_variables[location], alpha, location)
                 location_data[i][location]["infected"] = location_data[i-1][location]["infected"] + deriv_array[1]
                 ordered_1[location] = location_data[i][location]["infected"]
                 location_data[i][location]["recovered"] = location_data[i-1][location]["recovered"] + deriv_array[2]
@@ -95,18 +98,55 @@ def calc_all(total_vaccine_per_day, days):
     # print(location_data)
     return location_data
 
-the_dict = calc_all(1000000, 21)
+def make_plot(location, days_ago, days_forward, vaccines):
+    the_dict = calc_all(vaccines, days_forward)
+    master = {'days': [], 'deaths': [], 'active': [], 'vaccinated': []}
+    for i in range(days_ago, 0, -1):
+        master['days'].append(-i)
+        deceased = case_day('deceased', 'total', i, location)[location]
+        recovered = case_day('recovered', 'total', i, location)[location]
+        active = case_day('confirmed', 'total', i, location)[location] - (deceased + recovered)
+        master['active'].append(active)
 
-def make_plot():
-        master = {'days': [], 'count': []}
-        for key, values in the_dict.items():
-                master['days'].append(key)
-                master['count'].append(values['DL']['infected'])
-        print(type(the_dict))
+    for case in cases_list('deceased', days_ago, location)[location]:
+        master['deaths'].append(case)
 
-        fig = px.line(master, x='days', y='count')
-        graphJSON = json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder)
-        return graphJSON
+    for key, values in the_dict.items():
+
+        master['days'].append(key)
+        master['active'].append(values[location]['infected'])
+        master['deaths'].append(values[location]['dead'])
+
+    plot = go.Figure()
+
+    plot.add_trace(go.Scatter(
+        name='Cumulative Deaths',
+        x=master['days'],
+        y=master['deaths'],
+        stackgroup='one'
+    ))
+
+    plot.add_trace(go.Scatter(
+        name='Active Cases',
+        x=master['days'],
+        y=master['active'],
+        stackgroup='one'
+    )
+    )
+
+    plot.update_layout(
+        title=location,
+        xaxis_title="Days from Present",
+        yaxis_title="Cases",
+        legend_title="Legend",
+        font=dict(
+            family="Calibri, monospace",
+            size=18
+        )
+    )
+    # plot.show()
+    graphJSON = json.dumps(plot, cls=plotly.utils.PlotlyJSONEncoder)
+    return graphJSON
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

@@ -8,6 +8,13 @@ with open('population.json') as f:
     pop = json.loads(f.read())
 
 
+def gamma(location):
+    with open('gamma.json') as f:
+        gm = json.loads(f.read())
+
+    return gm[location]
+
+
 def state_index():
     """
     Assigns a number to each state (alphabetical order by state code)
@@ -76,7 +83,7 @@ def cases_list(case_type, length, location='All'):
         for state in raw_json:
             for key in raw_json[state]['dates']:
                 try:
-                    cases.append(raw_json[state]['dates'][key]['delta'][case_type])
+                    cases.append(raw_json[state]['dates'][key]['total'][case_type])
                 except KeyError:
                     cases.append(0)
 
@@ -87,7 +94,7 @@ def cases_list(case_type, length, location='All'):
     else:
         for key in raw_json[location]['dates']:
             try:
-                cases.append(raw_json[location]['dates'][key]['delta'][case_type])
+                cases.append(raw_json[location]['dates'][key]['total'][case_type])
             except KeyError:
                 cases.append(0)
 
@@ -116,7 +123,7 @@ def get_vaccinated(location):
 def get_beta(location):
     avg = 0
 
-    for i in range(7):
+    for i in range(3):
 
         SIDRV = get_SIDRV(i, location)
         # print(SIDRV)
@@ -129,7 +136,7 @@ def get_beta(location):
         beta /= (SIDRV['b']['susceptible']*SIDRV['b']['confirmed'])
         print(beta)
         avg -= beta        
-    return avg/7
+    return avg/3
 
 
 def get_delta(location):
