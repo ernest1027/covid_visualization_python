@@ -128,13 +128,13 @@ def get_beta(location):
         SIDRV = get_SIDRV(i, location)
         # print(SIDRV)
         beta = SIDRV['a']['susceptible'] - SIDRV['b']['susceptible']
-        print(beta)
+        # print(beta)
         beta += SIDRV['a']['vaccinated'] - SIDRV['b']['vaccinated']
-        print(beta)
+        # print(beta)
         beta *= pop[location]
-        print(beta)
+        # print(beta)
         beta /= (SIDRV['b']['susceptible']*SIDRV['b']['confirmed'])
-        print(beta)
+        # print(beta)
         avg -= beta        
     return avg/3
 
